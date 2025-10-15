@@ -1,31 +1,59 @@
-export type Validator = (value: string) => true | string;
+type Rule<T> = (value: T) => string | null;
 
-export const isRequired: Validator = (value) =>
-  value === undefined || value === null || value.toString().trim() === "" ? "Поле обязательно" : true;
+class SimpleZodString {
+  private rules: Rule<string>[] = [];
 
-export const isEmail: Validator = (value) =>
-  value === undefined ||
-  value === null ||
-  !/^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/.test(
-    value
-  )
-    ? "Неверный формат email"
-    : true;
-
-export const isNumber: Validator = (value) =>
-  value === undefined || value === null || !/^\d+$/.test(value) ? "Должно быть числом" : true;
-
-export const pattern =
-  (regex: RegExp, message: string): Validator =>
-  (value) =>
-    !regex.test(value) ? message : true;
-
-export const isPhone: Validator = (value) =>
-  value === undefined || !/^\+7 \(\d{3}\) \d{3}-\d{2}-\d{2}$/.test(value) ? "формат +7 (XXX) XXX-XX-XX" : true;
-export const validateField = (value: string, validators: Validator[]): string => {
-  for (const v of validators) {
-    const result = v(value);
-    if (result !== true) return result;
+  required(msg = "Обязательное поле") {
+    this.rules.push((v) => (v ? null : msg));
+    return this;
   }
-  return "";
+
+  email(msg = "Неверный email") {
+    this.rules.push((v) => (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) ? null : msg));
+    return this;
+  }
+
+  phone(msg = "Неверный телефон") {
+    this.rules.push((v) => (/^7\d{10}$/.test(v) ? null : msg));
+    return this;
+  }
+
+  number(msg = "Только цифры") {
+    this.rules.push((v) => (/^\d+$/.test(v) ? null : msg));
+    return this;
+  }
+
+  pattern(fn: (value: string) => boolean, msg: string) {
+    this.rules.push((v) => (fn(v) ? null : msg));
+    return this;
+  }
+
+  validate(value: string) {
+    for (const rule of this.rules) {
+      const err = rule(value);
+      if (err) return err;
+    }
+    return "";
+  }
+}
+
+export class SimpleZodSchema<T extends Record<string, any>> {
+  private shapeObj: Record<keyof T, SimpleZodString> = {} as any;
+
+  shape(shapeObj: Record<keyof T, SimpleZodString>) {
+    this.shapeObj = shapeObj;
+    return this;
+  }
+
+  validate(values: T) {
+    const errors: Record<keyof T, string> = {} as any;
+    for (const key in this.shapeObj) {
+      errors[key] = this.shapeObj[key].validate(values[key]);
+    }
+    return errors;
+  }
+}
+
+export const z = {
+  string: () => new SimpleZodString(),
 };

@@ -2,83 +2,97 @@
 import Input from "../../../components/ui/Input.vue";
 import Button from "../../../components/ui/Button.vue";
 import { computed, reactive } from "vue";
-import { validateField, isRequired, isNumber, isPhone, isEmail } from "../../../utils/validator";
-
-interface FormAData {
-  name: string;
-  email: string;
-  inn: string;
-  phone: string;
-}
+import { type FormAData } from "../../../types";
+import { formASchema } from "../../../types/schemas";
+import { formatPhone, normalizePhone, filterKey } from "../../../utils/form";
 const form = reactive<FormAData>({
   name: "",
-  phone: "",
-  inn: "",
   email: "",
+  inn: "",
+  phone: "",
 });
 
 const errors = reactive<Record<keyof FormAData, string>>({
-  email: "",
   name: "",
+  email: "",
   inn: "",
   phone: "",
 });
 
-const isFormValid = computed(() => {
-  const noErrors = Object.values(errors).every((e) => e === "");
-  return noErrors;
-});
+const validateForm = () => {
+  const result = formASchema.validate(form);
+  Object.assign(errors, result);
+  return Object.values(errors).every((e) => e === "");
+};
 
 const submitForm = () => {
-  errors.name = validateField(form.name, [isRequired]);
-  errors.email = validateField(form.email, [isEmail]);
-  errors.inn = validateField(form.inn, [isRequired, isNumber]);
-  errors.phone = validateField(form.phone, [isRequired, isPhone]);
-
-  const hasErrors = Object.values(errors).some((e: string) => e !== "");
-  if (!hasErrors) alert("Форма невалидна!");
+  if (validateForm()) {
+    alert("Форма валидна!");
+  } else {
+    console.log("Ошибки:", errors);
+  }
 };
+
+const onPhoneInput = (e: Event) => {
+  errors.email = "";
+  const raw = normalizePhone((e.target as HTMLInputElement).value);
+
+  if (!raw.startsWith("7")) {
+    form.phone = "7" + raw.slice(0, 10); // всего 11 цифр
+  } else {
+    form.phone = raw;
+  }
+};
+
+const isFormInvalid = computed(() => {
+  const validationResult = formASchema.validate(form);
+  return Object.values(validationResult).some((e) => e !== "");
+});
 </script>
 
 <template>
-  <form @submit.prevent="submitForm" class="form" action="">
+  <form @submit.prevent="submitForm" class="form">
     <h2>Форма A:</h2>
-    {{ JSON.stringify(errors) }}
     <Input
-      @blur="errors.name = validateField(form.name, [isRequired])"
-      @input="errors.name = ''"
-      :error="errors.name"
-      label="Имя"
       v-model="form.name"
+      label="Имя"
       placeholder="Иван"
+      :error="errors.name"
+      @blur="errors.name = formASchema.validate(form).name"
+      @input="errors.name = ''"
     />
     <Input
-      @blur="errors.email = validateField(form.email, [isEmail])"
-      :error="errors.email"
-      label="Email"
       v-model="form.email"
+      label="Email"
       placeholder="ivan@gmail.com"
+      :error="errors.email"
+      @blur="errors.email = formASchema.validate(form).email"
+      @input="errors.email = ''"
     />
-
     <Input
       v-model="form.inn"
-      :error="errors.inn"
-      @blur="errors.inn = validateField(form.inn, [isRequired, isNumber])"
-      @input="errors.inn = validateField(form.inn, [isRequired, isNumber])"
+      @keydown="(e: KeyboardEvent) => filterKey(e, 12)"
       label="ИНН"
       placeholder="111111111111"
+      :error="errors.inn"
+      @blur="errors.inn = formASchema.validate(form).inn"
+      type="text"
+      inputmode="numeric"
     />
 
     <Input
-      v-model="form.phone"
-      :error="errors.phone"
-      @blur="errors.phone = validateField(form.phone, [isRequired, isPhone])"
-      @input="errors.phone = validateField(form.phone, [isRequired, isPhone])"
+      :model-value="formatPhone(form.phone)"
       label="Телефон"
       placeholder="+7 (XXX) XXX-XX-XX"
+      :error="errors.phone"
+      @blur="errors.phone = formASchema.validate(form).phone"
+      @input="onPhoneInput"
+      @keydown="(e: KeyboardEvent) => filterKey(e, 18)"
+      type="text"
+      inputmode="numeric"
     />
 
-    <Button :disabled="isFormValid" type="submit">Отправить</Button>
+    <Button :disabled="isFormInvalid"> Отправить </Button>
   </form>
 </template>
 
